@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>STL 3D Viewer</title>
+  <style>
+    html, body { height: 100%; margin: 0; overflow: hidden; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans TC", Arial; }
+    #app { width: 100%; height: 100%; position: relative; }
+    .hud {
+      position: absolute; left: 12px; top: 12px;
+      background: rgba(0,0,0,.55); color: #fff; padding: 10px 12px; border-radius: 10px;
+      max-width: 80vw; font-size: 14px; line-height: 1.35;
+    }
+    .hud a { color: #a7d8ff; text-decoration: none; }
+    .hud code { background: rgba(255,255,255,.12); padding: 2px 6px; border-radius: 6px; }
+    .bar {
+      position: absolute; left: 12px; bottom: 12px;
+      background: rgba(0,0,0,.55); color: #fff; padding: 8px 12px; border-radius: 10px;
+      font-size: 13px;
+    }
+  </style>
+
+  <!-- 用 importmap 從 CDN 載入 three + addons（STLLoader/OrbitControls） -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <div id="app"></div>
+
+  <div class="hud" id="hud">
+    <div><b>STL 3D 預覽</b></div>
+    <div>滑鼠：左鍵旋轉 / 滾輪縮放 / 右鍵平移</div>
+    <div style="margin-top:6px;opacity:.9">
+      用法：<code>viewer.html?model=models/檔名.stl</code><br/>
+      例：<a id="exampleLink" href="#">(將依目前載入自動更新)</a>
+    </div>
+  </div>
+
+  <div class="bar" id="status">載入中…</div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+    const app = document.getElementById('app');
+    const statusEl = document.getElementById('status');
+    const exampleLink = document.getElementById('exampleLink');
+
+    // 允許用網址參數切換模型：viewer.html?model=models/xxx.stl
+    const params = new URLSearchParams(location.search);
+    let modelUrl = params.get('model') || 'models/HeadquartersBuilding.stl';
+
+    // 基本防呆：不允許 "../" 這類路徑跳脫
+    if (modelUrl.includes('..')) modelUrl = 'models/HeadquartersBuilding.stl';
+
+    exampleLink.textContent = location.origin + location.pathname + '?model=' + encodeURIComponent(modelUrl);
+    exampleLink.href = location.pathname + '?model=' + encodeURIComponent(modelUrl);
+
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    app.appendChild(renderer.domElement);
+
+    // Scene
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111111);
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.01, 10000);
+    camera.position.set(2, 1.5, 2);
+
+    // Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+
+    // Lights
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const dir1 = new THREE.DirectionalLight(0xffffff, 0.9);
+    dir1.position.set(3, 5, 2);
+    scene.add(dir1);
+    const dir2 = new THREE.DirectionalLight(0xffffff, 0.35);
+    dir2.position.set(-3, 2, -2);
+    scene.add(dir2);
+
+    // Helpers（可留可刪）
+    const grid = new THREE.GridHelper(10, 20, 0x444444, 0x222222);
+    grid.material.opacity = 0.35;
+    grid.material.transparent = true;
+    scene.add(grid);
+
+    let mesh = null;
+
+    function setStatus(msg) { statusEl.textContent = msg; }
+
+    function fitCameraToObject(object3d) {
+      const box = new THREE.Box3().setFromObject(object3d);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+
+      // 把模型移到場景中心
+      object3d.position.sub(center);
+
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const fov = camera.fov * (Math.PI / 180);
+      let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+
+      cameraZ *= 1.8; // 拉遠一點比較好看
+      camera.position.set(0, maxDim * 0.6, cameraZ);
+      camera.near = maxDim / 1000;
+      camera.far = maxDim * 1000;
+      camera.updateProjectionMatrix();
+
+      controls.target.set(0, 0, 0);
+      controls.update();
+
+      // 讓 grid 大小看起來合理
+      const gridSize = Math.max(10, maxDim * 2);
+      grid.scale.set(gridSize / 10, 1, gridSize / 10);
+    }
+
+    async function loadSTL(url) {
+      setStatus('載入中：' + url);
+      const loader = new STLLoader();
+
+      return new Promise((resolve, reject) => {
+        loader.load(
+          url,
+          (geometry) => resolve(geometry),
+          (xhr) => {
+            if (xhr.total) {
+              const p = (xhr.loaded / xhr.total * 100).toFixed(1);
+              setStatus(`載入中：${p}%  (${(xhr.loaded/1024/1024).toFixed(2)} MB)`);
+            }
+          },
+          (err) => reject(err)
+        );
+      });
+    }
+
+    (async () => {
+      try {
+        const geometry = await loadSTL(modelUrl);
+        geometry.computeVertexNormals();
+
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xbfbfbf,
+          metalness: 0.1,
+          roughness: 0.65
+        });
+
+        mesh = new THREE.Mesh(geometry, material);
+        scene.add(mesh);
+
+        fitCameraToObject(mesh);
+        setStatus('完成：' + modelUrl);
+      } catch (e) {
+        console.error(e);
+        setStatus('載入失敗：請確認 STL 路徑是否正確，且檔名不要有空白。');
+      }
+    })();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
