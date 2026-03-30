@@ -76,7 +76,7 @@
 
     const loader = new GLTFLoader();
     loader.load(
-      './model.glb',
+      './0329-1.glb',
       function (gltf) {
         const model = gltf.scene;
         scene.add(model);
@@ -101,7 +101,7 @@
       function () {},
       function (error) {
         console.error(error);
-        loading.textContent = '模型載入失敗，請確認 model.glb 是否存在';
+        loading.textContent = '模型載入失敗，請確認 0329-1.glb 是否存在';
       }
     );
 
