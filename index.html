@@ -4,27 +4,36 @@
   <meta charset="UTF-8">
   <title>3D展示空間</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <style>
-    body {
+    html, body {
       margin: 0;
+      width: 100%;
+      height: 100%;
       overflow: hidden;
       font-family: Arial, sans-serif;
+      background: #f0f0f0;
     }
 
     #loading {
       position: absolute;
-      top: 15px;
-      left: 15px;
-      background: rgba(0,0,0,0.6);
+      top: 20px;
+      left: 20px;
+      background: rgba(60, 60, 60, 0.85);
       color: #fff;
-      padding: 8px 12px;
-      border-radius: 8px;
+      padding: 14px 18px;
+      border-radius: 12px;
       z-index: 10;
+      font-size: 16px;
+      line-height: 1.5;
+      max-width: 420px;
+      white-space: pre-line;
+    }
+
+    canvas {
+      display: block;
     }
   </style>
 </head>
-
 <body>
 
 <div id="loading">模型載入中...</div>
@@ -34,17 +43,18 @@ import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
 import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
 
+const loadingBox = document.getElementById("loading");
+
 let scene, camera, renderer, controls;
 
 init();
 animate();
 
 function init() {
-
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0xf0f0f0);
 
-  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100000);
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200000);
   camera.position.set(3000, 2000, 3000);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -55,7 +65,6 @@ function init() {
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
 
-  // 光源
   const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 1.2);
   scene.add(hemiLight);
 
@@ -63,25 +72,23 @@ function init() {
   dirLight.position.set(2000, 3000, 2000);
   scene.add(dirLight);
 
-  // 地面格線
   const grid = new THREE.GridHelper(10000, 50);
   scene.add(grid);
 
-  // 座標軸
   const axes = new THREE.AxesHelper(1000);
   scene.add(axes);
 
-  // 載入 GLB
   const loader = new GLTFLoader();
 
-  loader.load(
-    './0329-1.glb',
-    function (gltf) {
+  const modelPath = "./model.glb";
+  loadingBox.textContent = "模型載入中...\n" + modelPath;
 
+  loader.load(
+    modelPath,
+    function (gltf) {
       const model = gltf.scene;
       scene.add(model);
 
-      // 自動置中
       const box = new THREE.Box3().setFromObject(model);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
@@ -90,22 +97,36 @@ function init() {
       model.position.y -= box.min.y;
       model.position.z -= center.z;
 
-      // 自動調整相機
       const maxDim = Math.max(size.x, size.y, size.z);
-      const distance = maxDim * 1.5;
+      const distance = Math.max(maxDim * 1.5, 1000);
 
       camera.position.set(distance, distance * 0.6, distance);
-      controls.target.set(0, size.y * 0.3, 0);
+      controls.target.set(0, Math.max(size.y * 0.3, 0), 0);
       controls.update();
 
-      document.getElementById("loading").style.display = "none";
+      loadingBox.textContent = "模型載入完成";
+      setTimeout(() => {
+        loadingBox.style.display = "none";
+      }, 1200);
     },
-
-    undefined,
-
+    function (xhr) {
+      if (xhr.total) {
+        const percent = (xhr.loaded / xhr.total * 100).toFixed(1);
+        loadingBox.textContent = `模型載入中...\n${percent}%`;
+      } else {
+        loadingBox.textContent = `模型載入中...\n已接收 ${xhr.loaded} bytes`;
+      }
+    },
     function (error) {
-      console.error(error);
-      document.getElementById("loading").innerText = "模型載入失敗";
+      console.error("GLB 載入失敗:", error);
+      loadingBox.textContent =
+        "模型載入失敗\n\n" +
+        "請檢查：\n" +
+        "1. repo 裡是否真的有 model.glb\n" +
+        "2. 檔名大小寫是否完全一致\n" +
+        "3. model.glb 是否損壞\n" +
+        "4. GitHub Pages 是否已更新\n\n" +
+        "請按 F12 看 Console 錯誤";
     }
   );
 
