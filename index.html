@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <title>3D展示空間</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>3D展示空間 - 偵錯版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     html, body {
       margin: 0;
@@ -11,22 +11,23 @@
       height: 100%;
       overflow: hidden;
       font-family: Arial, sans-serif;
-      background: #f0f0f0;
+      background: #e9e9e9;
     }
 
-    #loading {
+    #status {
       position: absolute;
-      top: 20px;
-      left: 20px;
-      background: rgba(60, 60, 60, 0.85);
+      top: 18px;
+      left: 18px;
+      z-index: 20;
+      background: rgba(40, 40, 40, 0.88);
       color: #fff;
-      padding: 14px 18px;
+      padding: 14px 16px;
       border-radius: 12px;
-      z-index: 10;
-      font-size: 16px;
+      max-width: 520px;
+      font-size: 15px;
       line-height: 1.5;
-      max-width: 420px;
-      white-space: pre-line;
+      white-space: pre-wrap;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.2);
     }
 
     canvas {
@@ -35,116 +36,190 @@
   </style>
 </head>
 <body>
+  <div id="status">初始化中...</div>
 
-<div id="loading">模型載入中...</div>
+  <script>
+    const statusBox = document.getElementById("status");
 
-<script type="module">
-import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
-import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
-
-const loadingBox = document.getElementById("loading");
-
-let scene, camera, renderer, controls;
-
-init();
-animate();
-
-function init() {
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xf0f0f0);
-
-  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200000);
-  camera.position.set(3000, 2000, 3000);
-
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(window.devicePixelRatio);
-  document.body.appendChild(renderer.domElement);
-
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-
-  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 1.2);
-  scene.add(hemiLight);
-
-  const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-  dirLight.position.set(2000, 3000, 2000);
-  scene.add(dirLight);
-
-  const grid = new THREE.GridHelper(10000, 50);
-  scene.add(grid);
-
-  const axes = new THREE.AxesHelper(1000);
-  scene.add(axes);
-
-  const loader = new GLTFLoader();
-
-  const modelPath = "./model.glb";
-  loadingBox.textContent = "模型載入中...\n" + modelPath;
-
-  loader.load(
-    modelPath,
-    function (gltf) {
-      const model = gltf.scene;
-      scene.add(model);
-
-      const box = new THREE.Box3().setFromObject(model);
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-
-      model.position.x -= center.x;
-      model.position.y -= box.min.y;
-      model.position.z -= center.z;
-
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const distance = Math.max(maxDim * 1.5, 1000);
-
-      camera.position.set(distance, distance * 0.6, distance);
-      controls.target.set(0, Math.max(size.y * 0.3, 0), 0);
-      controls.update();
-
-      loadingBox.textContent = "模型載入完成";
-      setTimeout(() => {
-        loadingBox.style.display = "none";
-      }, 1200);
-    },
-    function (xhr) {
-      if (xhr.total) {
-        const percent = (xhr.loaded / xhr.total * 100).toFixed(1);
-        loadingBox.textContent = `模型載入中...\n${percent}%`;
-      } else {
-        loadingBox.textContent = `模型載入中...\n已接收 ${xhr.loaded} bytes`;
-      }
-    },
-    function (error) {
-      console.error("GLB 載入失敗:", error);
-      loadingBox.textContent =
-        "模型載入失敗\n\n" +
-        "請檢查：\n" +
-        "1. repo 裡是否真的有 model.glb\n" +
-        "2. 檔名大小寫是否完全一致\n" +
-        "3. model.glb 是否損壞\n" +
-        "4. GitHub Pages 是否已更新\n\n" +
-        "請按 F12 看 Console 錯誤";
+    function setStatus(msg) {
+      statusBox.textContent = msg;
+      console.log(msg);
     }
-  );
 
-  window.addEventListener('resize', onWindowResize);
-}
+    function appendStatus(msg) {
+      statusBox.textContent += "\n" + msg;
+      console.log(msg);
+    }
 
-function onWindowResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-}
+    window.addEventListener("error", (e) => {
+      appendStatus("[window.error] " + (e.message || "未知錯誤"));
+    });
 
-function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-}
-</script>
+    window.addEventListener("unhandledrejection", (e) => {
+      appendStatus("[promise.error] " + (e.reason || "未知 Promise 錯誤"));
+    });
 
+    setStatus("HTML 已載入\n準備載入 Three.js 模組...");
+  </script>
+
+  <script type="module">
+    const statusBox = document.getElementById("status");
+
+    function setStatus(msg) {
+      statusBox.textContent = msg;
+      console.log(msg);
+    }
+
+    function appendStatus(msg) {
+      statusBox.textContent += "\n" + msg;
+      console.log(msg);
+    }
+
+    try {
+      setStatus("開始載入 ES Modules...");
+
+      const THREE = await import('https://unpkg.com/three@0.160.0/build/three.module.js');
+      appendStatus("THREE 載入成功");
+
+      const { OrbitControls } = await import('https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js');
+      appendStatus("OrbitControls 載入成功");
+
+      const { GLTFLoader } = await import('https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js');
+      appendStatus("GLTFLoader 載入成功");
+
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf0f0f0);
+
+      const camera = new THREE.PerspectiveCamera(
+        60,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        200000
+      );
+      camera.position.set(3000, 2000, 3000);
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      document.body.appendChild(renderer.domElement);
+      appendStatus("Renderer 建立成功");
+
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      appendStatus("控制器建立成功");
+
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 1.2);
+      scene.add(hemiLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      dirLight.position.set(2000, 3000, 2000);
+      scene.add(dirLight);
+
+      const grid = new THREE.GridHelper(10000, 50);
+      scene.add(grid);
+
+      const axes = new THREE.AxesHelper(1000);
+      scene.add(axes);
+      appendStatus("場景元素建立完成");
+
+      const modelPath = "./model.glb";
+      appendStatus("準備載入模型: " + modelPath);
+
+      const loader = new GLTFLoader();
+
+      let gotProgress = false;
+
+      loader.load(
+        modelPath,
+        function (gltf) {
+          appendStatus("GLB onLoad 觸發");
+
+          const model = gltf.scene;
+          scene.add(model);
+
+          const box = new THREE.Box3().setFromObject(model);
+          const center = box.getCenter(new THREE.Vector3());
+          const size = box.getSize(new THREE.Vector3());
+
+          appendStatus(
+            `模型尺寸: x=${size.x.toFixed(2)}, y=${size.y.toFixed(2)}, z=${size.z.toFixed(2)}`
+          );
+
+          model.position.x -= center.x;
+          model.position.y -= box.min.y;
+          model.position.z -= center.z;
+
+          const maxDim = Math.max(size.x, size.y, size.z);
+          const distance = Math.max(maxDim * 1.5, 1000);
+
+          camera.position.set(distance, distance * 0.6, distance);
+          controls.target.set(0, Math.max(size.y * 0.3, 0), 0);
+          controls.update();
+
+          appendStatus("模型載入成功");
+
+          setTimeout(() => {
+            statusBox.style.display = "none";
+          }, 1800);
+        },
+        function (xhr) {
+          gotProgress = true;
+          if (xhr.total) {
+            const percent = (xhr.loaded / xhr.total * 100).toFixed(1);
+            setStatus(
+              "模型下載中...\n" +
+              `已載入 ${xhr.loaded} / ${xhr.total} bytes\n` +
+              `${percent}%`
+            );
+          } else {
+            setStatus(
+              "模型下載中...\n" +
+              `已載入 ${xhr.loaded} bytes`
+            );
+          }
+        },
+        function (error) {
+          console.error(error);
+          setStatus(
+            "GLB 載入失敗\n\n" +
+            "可能原因：\n" +
+            "1. model.glb 不存在\n" +
+            "2. model.glb 損壞\n" +
+            "3. GLB 使用 Draco / Meshopt 壓縮但頁面未載入對應解碼器\n" +
+            "4. 網路或 CDN 被阻擋\n\n" +
+            "請按 F12 看 Console / Network"
+          );
+        }
+      );
+
+      setTimeout(() => {
+        if (!gotProgress) {
+          appendStatus("注意：目前還沒有收到任何模型下載進度");
+          appendStatus("這通常表示：模組載入問題、網路擋 CDN，或 model.glb 請求根本沒發出去");
+        }
+      }, 5000);
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      animate();
+      appendStatus("動畫循環啟動");
+    } catch (err) {
+      console.error(err);
+      statusBox.textContent =
+        "模組初始化失敗\n\n" +
+        (err && err.message ? err.message : String(err)) +
+        "\n\n這通常表示 three.js / GLTFLoader / OrbitControls 沒有成功載入。";
+    }
+  </script>
 </body>
 </html>
