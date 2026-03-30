@@ -1,41 +1,129 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>3D 模型展示入口</title>
+  <meta charset="UTF-8">
+  <title>3D展示空間</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <style>
-    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans TC",Arial; margin:24px; line-height:1.6;}
-    .box{max-width:720px; margin:auto; padding:18px 20px; border:1px solid #ddd; border-radius:14px;}
-    h1{font-size:20px; margin:0 0 10px;}
-    a{display:block; padding:12px 12px; border:1px solid #e5e5e5; border-radius:12px; text-decoration:none; margin:10px 0;}
-    a:hover{background:#f6f7f9;}
-    .tip{color:#555; font-size:13px; margin-top:12px;}
-    code{background:#f2f2f2; padding:2px 6px; border-radius:6px;}
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+
+    #loading {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      padding: 8px 12px;
+      border-radius: 8px;
+      z-index: 10;
+    }
   </style>
 </head>
+
 <body>
-  <div class="box">
-    <h1>3D 模型展示</h1>
 
-    <a href="Headquarters_Building.html">🏢 Headquarters Building（總部大樓）</a>
-    <a href="Taixi_Maintenance_Center.html">🏭 Taixi Maintenance Center（台西_維運中心）</a>
-    <a href="Lao_Teng_Apartment.html">🏠 Lao_Teng_Apartment.html (荖藤公寓) </a>
+<div id="loading">模型載入中...</div>
 
-    <div class="tip">
-      建議：電腦用 Chrome/Edge；手機在 LINE 內開啟不順時，請右上角選「在瀏覽器開啟」。<br>
-      若公司內網限制外部內容，請改用手機 4G/5G 測試。
-    </div>
-  </div>
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import { OrbitControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'https://unpkg.com/three@0.160.0/examples/jsm/loaders/GLTFLoader.js';
+
+let scene, camera, renderer, controls;
+
+init();
+animate();
+
+function init() {
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xf0f0f0);
+
+  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100000);
+  camera.position.set(3000, 2000, 3000);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  document.body.appendChild(renderer.domElement);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+
+  // 光源
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 1.2);
+  scene.add(hemiLight);
+
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  dirLight.position.set(2000, 3000, 2000);
+  scene.add(dirLight);
+
+  // 地面格線
+  const grid = new THREE.GridHelper(10000, 50);
+  scene.add(grid);
+
+  // 座標軸
+  const axes = new THREE.AxesHelper(1000);
+  scene.add(axes);
+
+  // 載入 GLB
+  const loader = new GLTFLoader();
+
+  loader.load(
+    './model.glb',
+    function (gltf) {
+
+      const model = gltf.scene;
+      scene.add(model);
+
+      // 自動置中
+      const box = new THREE.Box3().setFromObject(model);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+
+      model.position.x -= center.x;
+      model.position.y -= box.min.y;
+      model.position.z -= center.z;
+
+      // 自動調整相機
+      const maxDim = Math.max(size.x, size.y, size.z);
+      const distance = maxDim * 1.5;
+
+      camera.position.set(distance, distance * 0.6, distance);
+      controls.target.set(0, size.y * 0.3, 0);
+      controls.update();
+
+      document.getElementById("loading").style.display = "none";
+    },
+
+    undefined,
+
+    function (error) {
+      console.error(error);
+      document.getElementById("loading").innerText = "模型載入失敗";
+    }
+  );
+
+  window.addEventListener('resize', onWindowResize);
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+</script>
+
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
