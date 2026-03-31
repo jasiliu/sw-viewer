@@ -1,162 +1,318 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8">
-  <title>總部大樓 3D 客戶檢視版</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>3D 模型檢視 - STL 版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <style>
-    body {
+    html, body {
       margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
       font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      color: #222;
+      background: #f0f0f0;
     }
 
-    .hero {
-      background: linear-gradient(135deg, #2f6fed, #5f8fff);
-      color: white;
-      text-align: center;
-      padding: 60px 20px 50px;
+    canvas {
+      display: block;
     }
 
-    .hero h1 {
-      margin: 0 0 12px 0;
-      font-size: 34px;
-    }
-
-    .hero p {
-      margin: 0;
-      font-size: 18px;
-      opacity: 0.95;
-    }
-
-    .wrap {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 30px 20px 50px;
-    }
-
-    .card {
-      background: white;
-      border-radius: 16px;
-      padding: 28px 24px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.08);
-      margin-bottom: 24px;
-    }
-
-    .card h2 {
-      margin-top: 0;
-      font-size: 24px;
-      text-align: center;
-    }
-
-    .card p {
-      line-height: 1.8;
-      color: #444;
-      text-align: center;
-    }
-
-    .preview {
-      text-align: center;
-    }
-
-    .preview img {
-      max-width: 100%;
+    #status {
+      position: absolute;
+      top: 18px;
+      left: 18px;
+      z-index: 20;
+      background: rgba(40, 40, 40, 0.88);
+      color: #fff;
+      padding: 14px 16px;
       border-radius: 12px;
-      border: 1px solid #ddd;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.08);
-    }
-
-    .download-area {
-      text-align: center;
-      margin-top: 24px;
-    }
-
-    .download-btn {
-      display: inline-block;
-      padding: 14px 26px;
-      background: #2f6fed;
-      color: white;
-      text-decoration: none;
-      border-radius: 10px;
-      font-size: 18px;
-      font-weight: bold;
-    }
-
-    .download-btn:hover {
-      background: #1e4fc2;
-    }
-
-    .note {
-      margin-top: 14px;
+      max-width: 420px;
       font-size: 14px;
-      color: #777;
-      text-align: center;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
     }
 
-    .steps {
-      max-width: 620px;
-      margin: 0 auto;
-      line-height: 1.8;
-      color: #444;
+    #panel {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      z-index: 20;
+      background: rgba(255, 255, 255, 0.96);
+      color: #222;
+      padding: 14px;
+      border-radius: 12px;
+      min-width: 220px;
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
     }
 
-    footer {
-      text-align: center;
-      color: #777;
-      font-size: 13px;
-      padding: 20px;
+    #panel h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+    }
+
+    .view-btn {
+      display: block;
+      width: 100%;
+      margin: 6px 0;
+      padding: 10px 12px;
+      border: none;
+      border-radius: 8px;
+      background: #e9ecef;
+      cursor: pointer;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    .view-btn:hover {
+      background: #dfe3e6;
+    }
+
+    .small-note {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #666;
+      line-height: 1.4;
     }
   </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
-  <div class="hero">
-    <h1>總部大樓 3D 客戶檢視版</h1>
-    <p>提供客戶下載與查看 3D 模型檢視檔</p>
-  </div>
+  <div id="status">初始化中...</div>
 
-  <div class="wrap">
-    <div class="card">
-      <h2>模型預覽</h2>
-      <p>以下為本次提供之 3D 模型預覽畫面</p>
-      <div class="preview">
-        <img src="cover.jpg" alt="總部大樓 3D 預覽圖">
-      </div>
-    </div>
+  <div id="panel">
+    <h3>視角控制</h3>
+    <button class="view-btn" id="btnFront">正視圖</button>
+    <button class="view-btn" id="btnTop">俯視圖</button>
+    <button class="view-btn" id="btnIso">等角視圖</button>
+    <button class="view-btn" id="btnFit">回到模型</button>
 
-    <div class="card">
-      <h2>下載 3D 檢視檔</h2>
-      <p>
-        點擊下方按鈕下載 ZIP 檔。<br>
-        下載後解壓縮，即可開啟 3D 檢視檔。
-      </p>
-
-      <div class="download-area">
-        <a class="download-btn"
-           href="https://github.com/jasiliu/sw-viewer/releases/latest/download/0329-1_64.exe"
-           target="_blank">
-          下載 3D 檢視檔
-        </a>
-      </div>
-
-      <div class="note">
-        建議使用 Windows 10 / 11
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>使用步驟</h2>
-      <div class="steps">
-        1. 點擊「下載 3D 檢視檔」<br>
-        2. 下載完成後解壓縮 ZIP<br>
-        3. 開啟檢視程式或檔案<br>
-        4. 使用滑鼠旋轉、平移、縮放查看模型
-      </div>
+    <div class="small-note">
+      目前為 STL 展示版<br>
+      檔名請固定為 model.stl
     </div>
   </div>
 
-  <footer>
-    © 3D 客戶檢視頁
-  </footer>
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+
+    const statusBox = document.getElementById("status");
+    const btnFront = document.getElementById("btnFront");
+    const btnTop = document.getElementById("btnTop");
+    const btnIso = document.getElementById("btnIso");
+    const btnFit = document.getElementById("btnFit");
+
+    function setStatus(msg) {
+      statusBox.textContent = msg;
+      console.log(msg);
+    }
+
+    const CACHE_BUSTER = "v=20260331stl1";
+    const MODEL_FILE = "./model.stl?" + CACHE_BUSTER;
+
+    let scene, camera, renderer, controls;
+    let currentMesh = null;
+
+    let lastCenter = new THREE.Vector3(0, 0, 0);
+    let lastSize = new THREE.Vector3(1000, 1000, 1000);
+    let lastDistance = 1000;
+
+    init();
+    loadSTL();
+    bindViewButtons();
+    animate();
+
+    function init() {
+      setStatus("Three.js 載入成功");
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xf0f0f0);
+
+      camera = new THREE.PerspectiveCamera(
+        60,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        200000
+      );
+      camera.position.set(3000, 2000, 3000);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      document.body.appendChild(renderer.domElement);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.screenSpacePanning = true;
+      controls.minDistance = 1;
+      controls.maxDistance = 200000;
+
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 1.2);
+      scene.add(hemiLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+      dirLight.position.set(2000, 3000, 2000);
+      scene.add(dirLight);
+
+      const grid = new THREE.GridHelper(10000, 50);
+      scene.add(grid);
+
+      const axes = new THREE.AxesHelper(1000);
+      scene.add(axes);
+
+      window.addEventListener("resize", onWindowResize);
+    }
+
+    function loadSTL() {
+      setStatus("準備載入 STL...\n" + MODEL_FILE);
+
+      const loader = new STLLoader();
+
+      loader.load(
+        MODEL_FILE,
+        function (geometry) {
+          if (currentMesh) {
+            scene.remove(currentMesh);
+            currentMesh.geometry.dispose();
+            currentMesh.material.dispose();
+            currentMesh = null;
+          }
+
+          geometry.computeVertexNormals();
+
+          const material = new THREE.MeshStandardMaterial({
+            color: 0xb0b0b0,
+            metalness: 0.15,
+            roughness: 0.75
+          });
+
+          const mesh = new THREE.Mesh(geometry, material);
+          currentMesh = mesh;
+          scene.add(mesh);
+
+          geometry.computeBoundingBox();
+          const box = geometry.boundingBox;
+
+          const size = new THREE.Vector3();
+          box.getSize(size);
+
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+
+          mesh.position.x -= center.x;
+          mesh.position.y -= box.min.y;
+          mesh.position.z -= center.z;
+
+          lastCenter = new THREE.Vector3(0, size.y * 0.3, 0);
+          lastSize = size.clone();
+
+          const maxDim = Math.max(size.x, size.y, size.z);
+          lastDistance = Math.max(maxDim * 1.5, 1000);
+
+          fitModel();
+
+          setStatus(
+            "STL 載入完成\n" +
+            "檔案: " + MODEL_FILE + "\n" +
+            "尺寸 x=" + size.x.toFixed(2) +
+            " y=" + size.y.toFixed(2) +
+            " z=" + size.z.toFixed(2)
+          );
+
+          setTimeout(() => {
+            statusBox.style.display = "none";
+          }, 1200);
+        },
+        function (xhr) {
+          statusBox.style.display = "block";
+          if (xhr.total) {
+            const percent = (xhr.loaded / xhr.total * 100).toFixed(1);
+            setStatus("STL 載入中...\n" + percent + "%");
+          } else {
+            setStatus("STL 載入中...\n已接收 " + xhr.loaded + " bytes");
+          }
+        },
+        function (error) {
+          console.error(error);
+          setStatus(
+            "STL 載入失敗\n\n" +
+            "請檢查：\n" +
+            "1. model.stl 是否存在\n" +
+            "2. 檔名大小寫是否一致\n" +
+            "3. STL 是否損壞"
+          );
+        }
+      );
+    }
+
+    function fitModel() {
+      camera.position.set(lastDistance, lastDistance * 0.6, lastDistance);
+      controls.target.copy(lastCenter);
+      controls.update();
+    }
+
+    function setFrontView() {
+      const d = Math.max(lastDistance, lastSize.x, lastSize.y, lastSize.z) * 1.1;
+      camera.position.set(0, lastSize.y * 0.15, d);
+      controls.target.copy(lastCenter);
+      controls.update();
+      showTempStatus("已切換到正視圖");
+    }
+
+    function setTopView() {
+      const d = Math.max(lastDistance, lastSize.x, lastSize.z) * 1.2;
+      camera.position.set(0, d, 0.001);
+      controls.target.copy(lastCenter);
+      controls.update();
+      showTempStatus("已切換到俯視圖");
+    }
+
+    function setIsoView() {
+      camera.position.set(lastDistance, lastDistance * 0.6, lastDistance);
+      controls.target.copy(lastCenter);
+      controls.update();
+      showTempStatus("已切換到等角視圖");
+    }
+
+    function showTempStatus(msg) {
+      statusBox.style.display = "block";
+      setStatus(msg);
+      setTimeout(() => {
+        statusBox.style.display = "none";
+      }, 900);
+    }
+
+    function bindViewButtons() {
+      btnFront.addEventListener("click", setFrontView);
+      btnTop.addEventListener("click", setTopView);
+      btnIso.addEventListener("click", setIsoView);
+      btnFit.addEventListener("click", fitModel);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+  </script>
 </body>
 </html>
