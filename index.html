@@ -99,7 +99,7 @@
 
     <div class="small-note">
       目前為 STL 展示版<br>
-      檔名請固定為 0329-1.stl
+      檔名請固定為 model.stl
     </div>
   </div>
 
@@ -120,7 +120,7 @@
     }
 
     const CACHE_BUSTER = "v=20260331stl1";
-    const MODEL_FILE = "./0329-1.stl?" + CACHE_BUSTER;
+    const MODEL_FILE = "./model.stl?" + CACHE_BUSTER;
 
     let scene, camera, renderer, controls;
     let currentMesh = null;
@@ -250,7 +250,7 @@
           setStatus(
             "STL 載入失敗\n\n" +
             "請檢查：\n" +
-            "1. 0329-1.stl 是否存在\n" +
+            "1. model.stl 是否存在\n" +
             "2. 檔名大小寫是否一致\n" +
             "3. STL 是否損壞"
           );
