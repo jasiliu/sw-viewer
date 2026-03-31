@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>3D展示空間 - 公司穩定版</title>
+  <title>3D展示空間 - 公司版</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <style>
@@ -44,7 +44,7 @@
       color: #222;
       padding: 14px;
       border-radius: 12px;
-      min-width: 240px;
+      min-width: 250px;
       box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
     }
 
@@ -53,7 +53,15 @@
       font-size: 16px;
     }
 
-    .model-btn {
+    .section-title {
+      margin: 12px 0 8px 0;
+      font-size: 13px;
+      font-weight: bold;
+      color: #444;
+    }
+
+    .model-btn,
+    .view-btn {
       display: block;
       width: 100%;
       margin: 6px 0;
@@ -67,7 +75,8 @@
       transition: background 0.2s;
     }
 
-    .model-btn:hover {
+    .model-btn:hover,
+    .view-btn:hover {
       background: #dfe3e6;
     }
 
@@ -81,6 +90,16 @@
       font-size: 12px;
       color: #666;
       line-height: 1.4;
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn-row .view-btn.full {
+      grid-column: 1 / -1;
     }
   </style>
 
@@ -97,11 +116,22 @@
   <div id="status">初始化中...</div>
 
   <div id="panel">
-    <h3>模型切換</h3>
+    <h3>模型展示控制</h3>
+
+    <div class="section-title">模型切換</div>
     <div id="buttonContainer"></div>
+
+    <div class="section-title">視角切換</div>
+    <div class="btn-row">
+      <button class="view-btn" id="btnFront">正視圖</button>
+      <button class="view-btn" id="btnTop">俯視圖</button>
+      <button class="view-btn" id="btnIso">等角視圖</button>
+      <button class="view-btn" id="btnFit">回到模型</button>
+    </div>
+
     <div class="small-note">
       已內建防快取。<br>
-      更新模型後重新整理即可。
+      更新模型後，修改版本號再重新整理即可。
     </div>
   </div>
 
@@ -113,18 +143,17 @@
 
     const statusBox = document.getElementById("status");
     const buttonContainer = document.getElementById("buttonContainer");
+    const btnFront = document.getElementById("btnFront");
+    const btnTop = document.getElementById("btnTop");
+    const btnIso = document.getElementById("btnIso");
+    const btnFit = document.getElementById("btnFit");
 
     function setStatus(msg) {
       statusBox.textContent = msg;
       console.log(msg);
     }
 
-    function appendStatus(msg) {
-      statusBox.textContent += "\n" + msg;
-      console.log(msg);
-    }
-
-    const CACHE_BUSTER = "v=20260331b";
+    const CACHE_BUSTER = "v=20260331c";
 
     const MODEL_LIST = [
       { name: "總部大樓", file: "./Headquarters_Building_0314.glb" },
@@ -135,16 +164,19 @@
       file: item.file + "?" + CACHE_BUSTER
     }));
 
-    console.log("目前 MODEL_LIST =", MODEL_LIST);
-
     let scene, camera, renderer, controls;
     let loader, dracoLoader;
     let currentModel = null;
     let currentButtons = [];
     let loadToken = 0;
 
+    let lastFitTarget = new THREE.Vector3(0, 0, 0);
+    let lastFitDistance = 1000;
+    let lastModelSize = new THREE.Vector3(1000, 1000, 1000);
+
     init();
     createButtons();
+    bindViewButtons();
     loadModel(MODEL_LIST[0], 0);
     animate();
 
@@ -166,7 +198,6 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
       document.body.appendChild(renderer.domElement);
-      appendStatus("Renderer 建立成功");
 
       controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
@@ -174,7 +205,6 @@
       controls.screenSpacePanning = true;
       controls.minDistance = 1;
       controls.maxDistance = 200000;
-      appendStatus("OrbitControls 建立成功");
 
       const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 1.2);
       scene.add(hemiLight);
@@ -205,9 +235,7 @@
         const btn = document.createElement("button");
         btn.className = "model-btn";
         btn.textContent = item.name;
-        btn.addEventListener("click", () => {
-          loadModel(item, index);
-        });
+        btn.addEventListener("click", () => loadModel(item, index));
         buttonContainer.appendChild(btn);
         currentButtons.push(btn);
       });
@@ -215,24 +243,25 @@
 
     function setActiveButton(index) {
       currentButtons.forEach((btn, i) => {
-        if (i === index) {
-          btn.classList.add("active");
-        } else {
-          btn.classList.remove("active");
-        }
+        btn.classList.toggle("active", i === index);
       });
+    }
+
+    function bindViewButtons() {
+      btnFront.addEventListener("click", () => setFrontView());
+      btnTop.addEventListener("click", () => setTopView());
+      btnIso.addEventListener("click", () => setIsoView());
+      btnFit.addEventListener("click", () => fitCurrentModel());
     }
 
     function disposeMaterial(material) {
       if (!material) return;
-
       for (const key in material) {
         const value = material[key];
         if (value && typeof value === "object" && typeof value.dispose === "function") {
           value.dispose();
         }
       }
-
       if (typeof material.dispose === "function") {
         material.dispose();
       }
@@ -245,10 +274,7 @@
 
       currentModel.traverse((obj) => {
         if (obj.isMesh) {
-          if (obj.geometry) {
-            obj.geometry.dispose();
-          }
-
+          if (obj.geometry) obj.geometry.dispose();
           if (obj.material) {
             if (Array.isArray(obj.material)) {
               obj.material.forEach(mat => disposeMaterial(mat));
@@ -260,6 +286,47 @@
       });
 
       currentModel = null;
+    }
+
+    function fitCurrentModel() {
+      const target = lastFitTarget.clone();
+      const d = lastFitDistance;
+      camera.position.set(target.x + d, target.y + d * 0.6, target.z + d);
+      controls.target.copy(target);
+      controls.update();
+    }
+
+    function setFrontView() {
+      const target = lastFitTarget.clone();
+      const d = Math.max(lastFitDistance, lastModelSize.y, lastModelSize.x, lastModelSize.z) * 1.1;
+      camera.position.set(target.x, target.y + lastModelSize.y * 0.15, target.z + d);
+      controls.target.copy(target);
+      controls.update();
+      statusBox.style.display = "block";
+      setStatus("已切換到正視圖");
+      setTimeout(() => statusBox.style.display = "none", 900);
+    }
+
+    function setTopView() {
+      const target = lastFitTarget.clone();
+      const d = Math.max(lastFitDistance, lastModelSize.x, lastModelSize.z) * 1.2;
+      camera.position.set(target.x, target.y + d, target.z);
+      controls.target.copy(target);
+      controls.update();
+      statusBox.style.display = "block";
+      setStatus("已切換到俯視圖");
+      setTimeout(() => statusBox.style.display = "none", 900);
+    }
+
+    function setIsoView() {
+      const target = lastFitTarget.clone();
+      const d = lastFitDistance;
+      camera.position.set(target.x + d, target.y + d * 0.6, target.z + d);
+      controls.target.copy(target);
+      controls.update();
+      statusBox.style.display = "block";
+      setStatus("已切換到等角視圖");
+      setTimeout(() => statusBox.style.display = "none", 900);
     }
 
     function loadModel(modelItem, buttonIndex) {
@@ -278,12 +345,8 @@
 
       loader.load(
         modelItem.file,
-
         function (gltf) {
-          if (myToken !== loadToken) {
-            console.log("忽略舊載入結果:", modelItem.file);
-            return;
-          }
+          if (myToken !== loadToken) return;
 
           const model = gltf.scene;
           currentModel = model;
@@ -297,20 +360,25 @@
           model.position.y -= box.min.y;
           model.position.z -= center.z;
 
-          const maxDim = Math.max(size.x, size.y, size.z);
-          const distance = Math.max(maxDim * 1.5, 1000);
+          const normalizedBox = new THREE.Box3().setFromObject(model);
+          const normalizedCenter = normalizedBox.getCenter(new THREE.Vector3());
+          const normalizedSize = normalizedBox.getSize(new THREE.Vector3());
 
-          camera.position.set(distance, distance * 0.6, distance);
-          controls.target.set(0, Math.max(size.y * 0.3, 0), 0);
-          controls.update();
+          lastFitTarget = normalizedCenter.clone();
+          lastModelSize = normalizedSize.clone();
+
+          const maxDim = Math.max(normalizedSize.x, normalizedSize.y, normalizedSize.z);
+          lastFitDistance = Math.max(maxDim * 1.5, 1000);
+
+          fitCurrentModel();
 
           setStatus(
             "模型載入完成\n" +
             "名稱: " + modelItem.name + "\n" +
             "檔案: " + modelItem.file + "\n" +
-            "尺寸 x=" + size.x.toFixed(2) +
-            " y=" + size.y.toFixed(2) +
-            " z=" + size.z.toFixed(2)
+            "尺寸 x=" + normalizedSize.x.toFixed(2) +
+            " y=" + normalizedSize.y.toFixed(2) +
+            " z=" + normalizedSize.z.toFixed(2)
           );
 
           setTimeout(() => {
@@ -319,7 +387,6 @@
             }
           }, 1200);
         },
-
         function (xhr) {
           if (myToken !== loadToken) return;
 
@@ -342,7 +409,6 @@
             );
           }
         },
-
         function (error) {
           if (myToken !== loadToken) return;
 
