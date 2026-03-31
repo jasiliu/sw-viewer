@@ -1,443 +1,50 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-  <meta charset="UTF-8" />
-  <title>3D展示空間 - 公司版</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
+  <meta charset="UTF-8">
+  <title>總部大樓 3D 檢視</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    html, body {
-      margin: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
+    body {
       font-family: Arial, sans-serif;
-      background: #f0f0f0;
+      padding: 40px;
+      background: #f5f5f5;
+      text-align: center;
     }
 
-    canvas {
-      display: block;
+    h1 {
+      margin-bottom: 10px;
     }
 
-    #status {
-      position: absolute;
-      top: 18px;
-      left: 18px;
-      z-index: 20;
-      background: rgba(40, 40, 40, 0.88);
-      color: #fff;
-      padding: 14px 16px;
-      border-radius: 12px;
-      max-width: 460px;
-      font-size: 14px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+    p {
+      color: #555;
+      margin-bottom: 30px;
     }
 
-    #panel {
-      position: absolute;
-      top: 18px;
-      right: 18px;
-      z-index: 20;
-      background: rgba(255, 255, 255, 0.96);
-      color: #222;
-      padding: 14px;
-      border-radius: 12px;
-      min-width: 250px;
-      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
-    }
-
-    #panel h3 {
-      margin: 0 0 10px 0;
-      font-size: 16px;
-    }
-
-    .section-title {
-      margin: 12px 0 8px 0;
-      font-size: 13px;
-      font-weight: bold;
-      color: #444;
-    }
-
-    .model-btn,
-    .view-btn {
-      display: block;
-      width: 100%;
-      margin: 6px 0;
-      padding: 10px 12px;
-      border: none;
-      border-radius: 8px;
-      background: #e9ecef;
-      cursor: pointer;
-      text-align: left;
-      font-size: 14px;
-      transition: background 0.2s;
-    }
-
-    .model-btn:hover,
-    .view-btn:hover {
-      background: #dfe3e6;
-    }
-
-    .model-btn.active {
+    .download-btn {
+      display: inline-block;
+      padding: 14px 24px;
       background: #2f6fed;
-      color: #fff;
+      color: white;
+      text-decoration: none;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: bold;
     }
 
-    .small-note {
-      margin-top: 10px;
-      font-size: 12px;
-      color: #666;
-      line-height: 1.4;
-    }
-
-    .btn-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-
-    .btn-row .view-btn.full {
-      grid-column: 1 / -1;
+    .download-btn:hover {
+      background: #1e4fc2;
     }
   </style>
-
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-    }
-  }
-  </script>
 </head>
 <body>
-  <div id="status">初始化中...</div>
+  <h1>總部大樓 3D 客戶檢視版</h1>
+  <p>請點下方按鈕下載 3D 檢視檔。</p>
 
-  <div id="panel">
-    <h3>模型展示控制</h3>
-
-    <div class="section-title">模型切換</div>
-    <div id="buttonContainer"></div>
-
-    <div class="section-title">視角切換</div>
-    <div class="btn-row">
-      <button class="view-btn" id="btnFront">正視圖</button>
-      <button class="view-btn" id="btnTop">俯視圖</button>
-      <button class="view-btn" id="btnIso">等角視圖</button>
-      <button class="view-btn" id="btnFit">回到模型</button>
-    </div>
-
-    <div class="small-note">
-      已內建防快取。<br>
-      更新模型後，修改版本號再重新整理即可。
-    </div>
-  </div>
-
-  <script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-    import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
-
-    const statusBox = document.getElementById("status");
-    const buttonContainer = document.getElementById("buttonContainer");
-    const btnFront = document.getElementById("btnFront");
-    const btnTop = document.getElementById("btnTop");
-    const btnIso = document.getElementById("btnIso");
-    const btnFit = document.getElementById("btnFit");
-
-    function setStatus(msg) {
-      statusBox.textContent = msg;
-      console.log(msg);
-    }
-
-    const CACHE_BUSTER = "v=20260331c";
-
-    const MODEL_LIST = [
-      { name: "總部大樓", file: "./總部大樓.glb" },
-      { name: "案場 B", file: "./model_b.glb" },
-      { name: "案場 C", file: "./model_c.glb" }
-    ].map(item => ({
-      ...item,
-      file: item.file + "?" + CACHE_BUSTER
-    }));
-
-    let scene, camera, renderer, controls;
-    let loader, dracoLoader;
-    let currentModel = null;
-    let currentButtons = [];
-    let loadToken = 0;
-
-    let lastFitTarget = new THREE.Vector3(0, 0, 0);
-    let lastFitDistance = 1000;
-    let lastModelSize = new THREE.Vector3(1000, 1000, 1000);
-
-    init();
-    createButtons();
-    bindViewButtons();
-    loadModel(MODEL_LIST[0], 0);
-    animate();
-
-    function init() {
-      setStatus("Three.js 模組載入成功");
-
-      scene = new THREE.Scene();
-      scene.background = new THREE.Color(0xf0f0f0);
-
-      camera = new THREE.PerspectiveCamera(
-        60,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        200000
-      );
-      camera.position.set(3000, 2000, 3000);
-
-      renderer = new THREE.WebGLRenderer({ antialias: true });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(window.devicePixelRatio);
-      document.body.appendChild(renderer.domElement);
-
-      controls = new OrbitControls(camera, renderer.domElement);
-      controls.enableDamping = true;
-      controls.dampingFactor = 0.05;
-      controls.screenSpacePanning = true;
-      controls.minDistance = 1;
-      controls.maxDistance = 200000;
-
-      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 1.2);
-      scene.add(hemiLight);
-
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-      dirLight.position.set(2000, 3000, 2000);
-      scene.add(dirLight);
-
-      const grid = new THREE.GridHelper(10000, 50);
-      scene.add(grid);
-
-      const axes = new THREE.AxesHelper(1000);
-      scene.add(axes);
-
-      loader = new GLTFLoader();
-      dracoLoader = new DRACOLoader();
-      dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
-      loader.setDRACOLoader(dracoLoader);
-
-      window.addEventListener("resize", onWindowResize);
-    }
-
-    function createButtons() {
-      buttonContainer.innerHTML = "";
-      currentButtons = [];
-
-      MODEL_LIST.forEach((item, index) => {
-        const btn = document.createElement("button");
-        btn.className = "model-btn";
-        btn.textContent = item.name;
-        btn.addEventListener("click", () => loadModel(item, index));
-        buttonContainer.appendChild(btn);
-        currentButtons.push(btn);
-      });
-    }
-
-    function setActiveButton(index) {
-      currentButtons.forEach((btn, i) => {
-        btn.classList.toggle("active", i === index);
-      });
-    }
-
-    function bindViewButtons() {
-      btnFront.addEventListener("click", () => setFrontView());
-      btnTop.addEventListener("click", () => setTopView());
-      btnIso.addEventListener("click", () => setIsoView());
-      btnFit.addEventListener("click", () => fitCurrentModel());
-    }
-
-    function disposeMaterial(material) {
-      if (!material) return;
-      for (const key in material) {
-        const value = material[key];
-        if (value && typeof value === "object" && typeof value.dispose === "function") {
-          value.dispose();
-        }
-      }
-      if (typeof material.dispose === "function") {
-        material.dispose();
-      }
-    }
-
-    function clearCurrentModel() {
-      if (!currentModel) return;
-
-      scene.remove(currentModel);
-
-      currentModel.traverse((obj) => {
-        if (obj.isMesh) {
-          if (obj.geometry) obj.geometry.dispose();
-          if (obj.material) {
-            if (Array.isArray(obj.material)) {
-              obj.material.forEach(mat => disposeMaterial(mat));
-            } else {
-              disposeMaterial(obj.material);
-            }
-          }
-        }
-      });
-
-      currentModel = null;
-    }
-
-    function fitCurrentModel() {
-      const target = lastFitTarget.clone();
-      const d = lastFitDistance;
-      camera.position.set(target.x + d, target.y + d * 0.6, target.z + d);
-      controls.target.copy(target);
-      controls.update();
-    }
-
-    function setFrontView() {
-      const target = lastFitTarget.clone();
-      const d = Math.max(lastFitDistance, lastModelSize.y, lastModelSize.x, lastModelSize.z) * 1.1;
-      camera.position.set(target.x, target.y + lastModelSize.y * 0.15, target.z + d);
-      controls.target.copy(target);
-      controls.update();
-      statusBox.style.display = "block";
-      setStatus("已切換到正視圖");
-      setTimeout(() => statusBox.style.display = "none", 900);
-    }
-
-    function setTopView() {
-      const target = lastFitTarget.clone();
-      const d = Math.max(lastFitDistance, lastModelSize.x, lastModelSize.z) * 1.2;
-      camera.position.set(target.x, target.y + d, target.z);
-      controls.target.copy(target);
-      controls.update();
-      statusBox.style.display = "block";
-      setStatus("已切換到俯視圖");
-      setTimeout(() => statusBox.style.display = "none", 900);
-    }
-
-    function setIsoView() {
-      const target = lastFitTarget.clone();
-      const d = lastFitDistance;
-      camera.position.set(target.x + d, target.y + d * 0.6, target.z + d);
-      controls.target.copy(target);
-      controls.update();
-      statusBox.style.display = "block";
-      setStatus("已切換到等角視圖");
-      setTimeout(() => statusBox.style.display = "none", 900);
-    }
-
-    function loadModel(modelItem, buttonIndex) {
-      const myToken = ++loadToken;
-
-      setActiveButton(buttonIndex);
-      statusBox.style.display = "block";
-
-      setStatus(
-        "準備載入模型...\n" +
-        "名稱: " + modelItem.name + "\n" +
-        "檔案: " + modelItem.file
-      );
-
-      clearCurrentModel();
-
-      loader.load(
-        modelItem.file,
-        function (gltf) {
-          if (myToken !== loadToken) return;
-
-          const model = gltf.scene;
-          currentModel = model;
-          scene.add(model);
-
-          const box = new THREE.Box3().setFromObject(model);
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-
-          model.position.x -= center.x;
-          model.position.y -= box.min.y;
-          model.position.z -= center.z;
-
-          const normalizedBox = new THREE.Box3().setFromObject(model);
-          const normalizedCenter = normalizedBox.getCenter(new THREE.Vector3());
-          const normalizedSize = normalizedBox.getSize(new THREE.Vector3());
-
-          lastFitTarget = normalizedCenter.clone();
-          lastModelSize = normalizedSize.clone();
-
-          const maxDim = Math.max(normalizedSize.x, normalizedSize.y, normalizedSize.z);
-          lastFitDistance = Math.max(maxDim * 1.5, 1000);
-
-          fitCurrentModel();
-
-          setStatus(
-            "模型載入完成\n" +
-            "名稱: " + modelItem.name + "\n" +
-            "檔案: " + modelItem.file + "\n" +
-            "尺寸 x=" + normalizedSize.x.toFixed(2) +
-            " y=" + normalizedSize.y.toFixed(2) +
-            " z=" + normalizedSize.z.toFixed(2)
-          );
-
-          setTimeout(() => {
-            if (myToken === loadToken) {
-              statusBox.style.display = "none";
-            }
-          }, 1200);
-        },
-        function (xhr) {
-          if (myToken !== loadToken) return;
-
-          statusBox.style.display = "block";
-
-          if (xhr.total) {
-            const percent = (xhr.loaded / xhr.total * 100).toFixed(1);
-            setStatus(
-              "模型載入中...\n" +
-              "名稱: " + modelItem.name + "\n" +
-              "檔案: " + modelItem.file + "\n" +
-              percent + "%"
-            );
-          } else {
-            setStatus(
-              "模型載入中...\n" +
-              "名稱: " + modelItem.name + "\n" +
-              "檔案: " + modelItem.file + "\n" +
-              "已接收 " + xhr.loaded + " bytes"
-            );
-          }
-        },
-        function (error) {
-          if (myToken !== loadToken) return;
-
-          console.error(error);
-          setStatus(
-            "模型載入失敗\n\n" +
-            "名稱: " + modelItem.name + "\n" +
-            "檔案: " + modelItem.file + "\n\n" +
-            "請檢查：\n" +
-            "1. 檔案是否存在\n" +
-            "2. 檔名大小寫是否一致\n" +
-            "3. GLB 是否損壞\n" +
-            "4. Draco 解碼器是否可連線"
-          );
-        }
-      );
-    }
-
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    function animate() {
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-    }
-  </script>
+  <a class="download-btn"
+     href="https://github.com/jasiliu/sw-viewer/releases/latest/download/總部大樓_3D檢視.zip"
+     target="_blank">
+    下載 3D 檢視檔
+  </a>
 </body>
 </html>
