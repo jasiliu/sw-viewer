@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <title>3D展示空間 - 多模型切換版</title>
+  <title>3D展示空間 - 公司穩定版</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
   <style>
@@ -28,7 +28,7 @@
       color: #fff;
       padding: 14px 16px;
       border-radius: 12px;
-      max-width: 420px;
+      max-width: 460px;
       font-size: 14px;
       line-height: 1.5;
       white-space: pre-wrap;
@@ -40,11 +40,11 @@
       top: 18px;
       right: 18px;
       z-index: 20;
-      background: rgba(255, 255, 255, 0.95);
+      background: rgba(255, 255, 255, 0.96);
       color: #222;
       padding: 14px;
       border-radius: 12px;
-      min-width: 220px;
+      min-width: 240px;
       box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
     }
 
@@ -64,7 +64,7 @@
       cursor: pointer;
       text-align: left;
       font-size: 14px;
-      transition: 0.2s;
+      transition: background 0.2s;
     }
 
     .model-btn:hover {
@@ -100,7 +100,8 @@
     <h3>模型切換</h3>
     <div id="buttonContainer"></div>
     <div class="small-note">
-      點擊按鈕即可切換模型
+      已內建防快取。<br>
+      更新模型後重新整理即可。
     </div>
   </div>
 
@@ -123,17 +124,24 @@
       console.log(msg);
     }
 
+    const CACHE_BUSTER = "v=20260331b";
+
     const MODEL_LIST = [
       { name: "總部大樓", file: "./Headquarters_Building_0314.glb" },
       { name: "案場 B", file: "./model_b.glb" },
       { name: "案場 C", file: "./model_c.glb" }
-    ];
+    ].map(item => ({
+      ...item,
+      file: item.file + "?" + CACHE_BUSTER
+    }));
+
+    console.log("目前 MODEL_LIST =", MODEL_LIST);
 
     let scene, camera, renderer, controls;
     let loader, dracoLoader;
     let currentModel = null;
     let currentButtons = [];
-    let grid, axes;
+    let loadToken = 0;
 
     init();
     createButtons();
@@ -175,10 +183,10 @@
       dirLight.position.set(2000, 3000, 2000);
       scene.add(dirLight);
 
-      grid = new THREE.GridHelper(10000, 50);
+      const grid = new THREE.GridHelper(10000, 50);
       scene.add(grid);
 
-      axes = new THREE.AxesHelper(1000);
+      const axes = new THREE.AxesHelper(1000);
       scene.add(axes);
 
       loader = new GLTFLoader();
@@ -215,6 +223,21 @@
       });
     }
 
+    function disposeMaterial(material) {
+      if (!material) return;
+
+      for (const key in material) {
+        const value = material[key];
+        if (value && typeof value === "object" && typeof value.dispose === "function") {
+          value.dispose();
+        }
+      }
+
+      if (typeof material.dispose === "function") {
+        material.dispose();
+      }
+    }
+
     function clearCurrentModel() {
       if (!currentModel) return;
 
@@ -222,11 +245,13 @@
 
       currentModel.traverse((obj) => {
         if (obj.isMesh) {
-          if (obj.geometry) obj.geometry.dispose();
+          if (obj.geometry) {
+            obj.geometry.dispose();
+          }
 
           if (obj.material) {
             if (Array.isArray(obj.material)) {
-              obj.material.forEach((mat) => disposeMaterial(mat));
+              obj.material.forEach(mat => disposeMaterial(mat));
             } else {
               disposeMaterial(obj.material);
             }
@@ -237,21 +262,17 @@
       currentModel = null;
     }
 
-    function disposeMaterial(material) {
-      if (!material) return;
-
-      for (const key in material) {
-        const value = material[key];
-        if (value && typeof value === "object" && "minFilter" in value) {
-          value.dispose?.();
-        }
-      }
-      material.dispose?.();
-    }
-
     function loadModel(modelItem, buttonIndex) {
+      const myToken = ++loadToken;
+
       setActiveButton(buttonIndex);
-      setStatus(`準備載入模型...\n${modelItem.name}\n${modelItem.file}`);
+      statusBox.style.display = "block";
+
+      setStatus(
+        "準備載入模型...\n" +
+        "名稱: " + modelItem.name + "\n" +
+        "檔案: " + modelItem.file
+      );
 
       clearCurrentModel();
 
@@ -259,6 +280,11 @@
         modelItem.file,
 
         function (gltf) {
+          if (myToken !== loadToken) {
+            console.log("忽略舊載入結果:", modelItem.file);
+            return;
+          }
+
           const model = gltf.scene;
           currentModel = model;
           scene.add(model);
@@ -279,46 +305,57 @@
           controls.update();
 
           setStatus(
-            `模型載入完成\n` +
-            `名稱: ${modelItem.name}\n` +
-            `尺寸 x=${size.x.toFixed(2)} y=${size.y.toFixed(2)} z=${size.z.toFixed(2)}`
+            "模型載入完成\n" +
+            "名稱: " + modelItem.name + "\n" +
+            "檔案: " + modelItem.file + "\n" +
+            "尺寸 x=" + size.x.toFixed(2) +
+            " y=" + size.y.toFixed(2) +
+            " z=" + size.z.toFixed(2)
           );
 
           setTimeout(() => {
-            statusBox.style.display = "none";
-          }, 1400);
+            if (myToken === loadToken) {
+              statusBox.style.display = "none";
+            }
+          }, 1200);
         },
 
         function (xhr) {
+          if (myToken !== loadToken) return;
+
           statusBox.style.display = "block";
 
           if (xhr.total) {
             const percent = (xhr.loaded / xhr.total * 100).toFixed(1);
             setStatus(
-              `模型載入中...\n` +
-              `名稱: ${modelItem.name}\n` +
-              `${percent}%`
+              "模型載入中...\n" +
+              "名稱: " + modelItem.name + "\n" +
+              "檔案: " + modelItem.file + "\n" +
+              percent + "%"
             );
           } else {
             setStatus(
-              `模型載入中...\n` +
-              `名稱: ${modelItem.name}\n` +
-              `已接收 ${xhr.loaded} bytes`
+              "模型載入中...\n" +
+              "名稱: " + modelItem.name + "\n" +
+              "檔案: " + modelItem.file + "\n" +
+              "已接收 " + xhr.loaded + " bytes"
             );
           }
         },
 
         function (error) {
+          if (myToken !== loadToken) return;
+
           console.error(error);
           setStatus(
-            `模型載入失敗\n\n` +
-            `名稱: ${modelItem.name}\n` +
-            `檔案: ${modelItem.file}\n\n` +
-            `請檢查：\n` +
-            `1. 檔案是否存在\n` +
-            `2. 檔名大小寫是否一致\n` +
-            `3. GLB 是否損壞\n` +
-            `4. Draco 解碼器是否可連線`
+            "模型載入失敗\n\n" +
+            "名稱: " + modelItem.name + "\n" +
+            "檔案: " + modelItem.file + "\n\n" +
+            "請檢查：\n" +
+            "1. 檔案是否存在\n" +
+            "2. 檔名大小寫是否一致\n" +
+            "3. GLB 是否損壞\n" +
+            "4. Draco 解碼器是否可連線"
           );
         }
       );
